@@ -1,3 +1,18 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
-logs/*.log
+
+# Log files
+*.log
+
+# VS Code settings
+.vscode/
+
+# IntelliJ settings
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
