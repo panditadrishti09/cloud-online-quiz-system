@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloudQuiz – Take Quiz</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="logo">☁️ CloudQuiz</div>
+    <div class="nav-info">
+      <span id="navUser">Loading...</span>
+      <button onclick="doLogout()"
+        style="margin-left:12px;background:rgba(255,255,255,0.2);border:none;
+               color:white;padding:6px 14px;border-radius:20px;cursor:pointer;
+               font-size:0.85rem;">
+        Logout
+      </button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Loading State -->
+    <div id="loadingDiv" class="loading">Loading questions</div>
+
+    <!-- Quiz Card -->
+    <div id="quizCard" class="card" style="display:none;">
+      <div class="quiz-header">
+        <h2>📝 Online Quiz</h2>
+        <div class="timer-box" id="timerBox">⏱ 10:00</div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progressBar" style="width:0%"></div>
+      </div>
+
+      <!-- Questions Container -->
+      <div id="questionsContainer"></div>
+
+      <!-- Footer -->
+      <div class="quiz-footer">
+        <span class="answered-count" id="answeredCount">Answered: 0 / 0</span>
+        <button class="btn btn-primary" onclick="submitQuiz()" style="width:auto;">
+          Submit Quiz ✓
+        </button>
+      </div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderCard" class="card" style="margin-top:28px;display:none;">
+      <h3 style="margin-bottom:4px;">🏆 Leaderboard</h3>
+      <p style="color:var(--muted);font-size:0.85rem;margin-bottom:0;">Top 10 scores</p>
+      <table class="leaderboard-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Username</th>
+            <th>Score</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="leaderBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let questions   = [];
+    let answers     = {};
+    let timerSecs   = 600; // 10 minutes
+    let timerHandle = null;
+    let startTime   = Date.now();
+
+    // ── Auth check ──────────────────────────────────────────────
+    async function init() {
+      const me = await fetch('/api/me').then(r => r.json());
+      if (!me.loggedIn) { window.location.href = '/'; return; }
+      document.getElementById('navUser').textContent = '👤 ' + me.username;
+      loadQuestions();
+      loadLeaderboard();
+    }
+
+    // ── Load questions from API ──────────────────────────────────
+    async function loadQuestions() {
+      const data = await fetch('/api/questions').then(r => r.json());
+      questions = data;
+
+      document.getElementById('loadingDiv').style.display = 'none';
+      document.getElementById('quizCard').style.display   = 'block';
+
+      renderQuestions();
+      startTimer();
+    }
+
+    // ── Render all question blocks ───────────────────────────────
+    function renderQuestions() {
+      const container = document.getElementById('questionsContainer');
+      container.innerHTML = '';
+
+      questions.forEach((q, idx) => {
+        const block = document.createElement('div');
+        block.className = 'question-block';
+        block.innerHTML = `
+          <div class="q-number">Question ${idx + 1} of ${questions.length} · ${q.category}</div>
+          <div class="q-text">${q.question}</div>
+          <ul class="options-list">
+            ${q.options.map((opt, i) => `
+              <li>
+                <label class="option-label">
+                  <input type="radio" name="q_${q._id}" value="${i}"
+                    onchange="recordAnswer('${q._id}', ${i})" />
+                  <span>${opt}</span>
+                </label>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+        container.appendChild(block);
+      });
+
+      updateAnsweredCount();
+      document.getElementById('progressBar').style.width = '0%';
+    }
+
+    // ── Record answer selection ──────────────────────────────────
+    function recordAnswer(qId, optIdx) {
+      answers[qId] = optIdx;
+      updateAnsweredCount();
+    }
+
+    function updateAnsweredCount() {
+      const done = Object.keys(answers).length;
+      document.getElementById('answeredCount').textContent =
+        `Answered: ${done} / ${questions.length}`;
+      document.getElementById('progressBar').style.width =
+        `${Math.round((done / questions.length) * 100)}%`;
+    }
+
+    // ── Timer ────────────────────────────────────────────────────
+    function startTimer() {
+      timerHandle = setInterval(() => {
+        timerSecs--;
+        const m = String(Math.floor(timerSecs / 60)).padStart(2, '0');
+        const s = String(timerSecs % 60).padStart(2, '0');
+        const box = document.getElementById('timerBox');
+        box.textContent = `⏱ ${m}:${s}`;
+        if (timerSecs <= 60)  box.className = 'timer-box danger';
+        else if (timerSecs <= 180) box.className = 'timer-box warning';
+
+        if (timerSecs <= 0) {
+          clearInterval(timerHandle);
+          submitQuiz(true);
+        }
+      }, 1000);
+    }
+
+    // ── Submit quiz ──────────────────────────────────────────────
+    async function submitQuiz(auto = false) {
+      if (!auto) {
+        const unanswered = questions.length - Object.keys(answers).length;
+        if (unanswered > 0) {
+          if (!confirm(`You have ${unanswered} unanswered question(s). Submit anyway?`)) return;
+        }
+      }
+      clearInterval(timerHandle);
+
+      const timeTaken = Math.round((Date.now() - startTime) / 1000);
+
+      const res  = await fetch('/api/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answers, timeTaken }),
+      });
+      const data = await res.json();
+
+      // Store result and redirect
+      localStorage.setItem('quizResult', JSON.stringify(data));
+      window.location.href = '/result.html';
+    }
+
+    // ── Leaderboard ──────────────────────────────────────────────
+    async function loadLeaderboard() {
+      const data = await fetch('/api/leaderboard').then(r => r.json());
+      if (!data.length) return;
+
+      document.getElementById('leaderCard').style.display = 'block';
+      const tbody = document.getElementById('leaderBody');
+      tbody.innerHTML = data.map((entry, i) => {
+        const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-n';
+        const pct = Math.round((entry.score / entry.total) * 100);
+        return `
+          <tr>
+            <td><span class="rank-badge ${rankClass}">${i + 1}</span></td>
+            <td><strong>${entry.username}</strong></td>
+            <td>${entry.score}/${entry.total} (${pct}%)</td>
+            <td>${entry.timeTaken}s</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // ── Logout ───────────────────────────────────────────────────
+    async function doLogout() {
+      await fetch('/api/logout', { method: 'POST' });
+      window.location.href = '/';
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CloudQuiz – Result</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="logo">☁️ CloudQuiz</div>
+    <div class="nav-info" id="navUser"></div>
+  </nav>
+
+  <div class="container">
+    <div class="card result-card">
+
+      <div class="score-circle">
+        <div class="pct" id="pctDisplay">--%</div>
+        <div class="label">Score</div>
+      </div>
+
+      <h2 id="gradeTitle">Quiz Complete!</h2>
+      <p class="grade-msg" id="gradeMsg"></p>
+
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-val" id="statScore">-</div>
+          <div class="stat-lbl">Correct Answers</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statTotal">-</div>
+          <div class="stat-lbl">Total Questions</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-val" id="statTime">-</div>
+          <div class="stat-lbl">Time Taken</div>
+        </div>
+      </div>
+
+      <div class="result-actions">
+        <a href="/quiz.html" class="btn btn-primary">Retake Quiz</a>
+        <a href="/"          class="btn btn-outline">Back to Home</a>
+      </div>
+
+      <!-- Cloud + HDFS explanation for viva -->
+      <div style="margin-top:36px;padding:20px;background:var(--bg);border-radius:10px;text-align:left;">
+        <h4 style="margin-bottom:12px;color:var(--text);">☁️ Cloud Computing Concepts Used</h4>
+        <div class="cloud-tags" style="justify-content:flex-start;margin-bottom:12px;">
+          <span class="cloud-tag tag-saas">SaaS</span>
+          <span class="cloud-tag tag-paas">PaaS</span>
+          <span class="cloud-tag tag-iaas">IaaS</span>
+          <span class="cloud-tag tag-hdfs">HDFS</span>
+        </div>
+        <ul style="font-size:0.85rem;color:var(--muted);line-height:1.9;padding-left:18px;">
+          <li><strong>SaaS:</strong> This web quiz app is delivered as a service via browser</li>
+          <li><strong>PaaS:</strong> Node.js + Express provides the runtime platform</li>
+          <li><strong>IaaS:</strong> App deploys on AWS EC2 (virtual machine) in production</li>
+          <li><strong>HDFS:</strong> Quiz attempt logs are stored in Hadoop HDFS for analysis</li>
+          <li><strong>MapReduce:</strong> Log files processed to count attempts, errors, high scores</li>
+          <li><strong>MongoDB Atlas:</strong> Cloud database (PaaS) stores users, questions, scores</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function init() {
+      const me = await fetch('/api/me').then(r => r.json());
+      if (!me.loggedIn) { window.location.href = '/'; return; }
+      document.getElementById('navUser').textContent = '👤 ' + me.username;
+
+      const result = JSON.parse(localStorage.getItem('quizResult'));
+      if (!result) { window.location.href = '/quiz.html'; return; }
+
+      const { score, total, percentage, timeTaken } = result;
+
+      document.getElementById('pctDisplay').textContent = percentage + '%';
+      document.getElementById('statScore').textContent  = score;
+      document.getElementById('statTotal').textContent  = total;
+      document.getElementById('statTime').textContent   = timeTaken + 's';
+
+      // Grade message
+      let title, msg, color;
+      if (percentage >= 90)      { title = '🏆 Excellent!';     msg = 'Outstanding performance!';         color = '#10b981'; }
+      else if (percentage >= 70) { title = '👍 Good Job!';      msg = 'Well done, keep it up!';           color = '#4f46e5'; }
+      else if (percentage >= 50) { title = '📚 Keep Learning!'; msg = 'Passed! Review weak topics.';      color = '#f59e0b'; }
+      else                       { title = '❌ Try Again';       msg = 'Below 50%. More practice needed.'; color = '#ef4444'; }
+
+      document.getElementById('gradeTitle').textContent        = title;
+      document.getElementById('gradeMsg').textContent          = msg;
+      document.querySelector('.score-circle').style.borderColor = color;
+      document.getElementById('pctDisplay').style.color         = color;
+
+      localStorage.removeItem('quizResult');
+    }
+
+    init();
+  </script>
+</body>
+</html>
